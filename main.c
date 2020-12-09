@@ -1,6 +1,6 @@
 /*
  * File:   main.c
- * Author: dtek0068
+ * Author: Jesse Järvi, Roope Pouta, Samuel Kivi, Tomas Kopra
  *
  * Created on 02 December 2020, 09:41
  */
@@ -68,7 +68,7 @@ void LCD_Init (void)
     PORTB.DIRSET = (PIN3_bm | PIN4_bm | PIN5_bm); // Enables pins
     PORTB.OUTSET = PIN5_bm;                       // Sets pin 5 for output
     PORTB.OUTCLR = (PIN3_bm | PIN4_bm);           // Clears pins 3 & 4
-	PORTD.DIR = 0xFF;                             // Enablses dataports 
+	PORTD.DIR = 0xFF;                             // Enables dataports 
     PORTD.OUT = 0x00;                             // Sets dataports for output
     _delay_us(delay_lcd_set);						
 	
