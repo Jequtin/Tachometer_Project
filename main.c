@@ -30,45 +30,46 @@
 #define big_delay 2000
 #define small_delay 500
 #define black_box 0xFF
+#define ADC_threshold 125
 
-volatile uint16_t ADC = 0;
-volatile uint8_t updateLCD = 0; 
+volatile uint16_t ADC = 0;      // Value of ADC
+volatile uint8_t updateLCD = 0;     // Help variable for LCD-update 
 
-volatile unsigned int clicks;
-volatile unsigned int rpm;
+volatile uint16_t count;     // Variable for counting interrupts per second
+volatile uint16_t rpm;      // Variable for counting rpm
 
-//set LCD-ports
-void LCD_Command( unsigned char cmnd )
+// Set LCD-ports
+void LCD_Command( uint8_t cmnd )
 {	
     PORTD.OUT = cmnd;
-	PORTB.OUTCLR = PIN4_bm;				/* RS=0, command reg. */
-	PORTB.OUTSET = PIN3_bm;				/* Enable pulse */
+	PORTB.OUTCLR = PIN4_bm;				// RS=0, command reg.
+	PORTB.OUTSET = PIN3_bm;				// Enable pulse
 	_delay_us(delay_enable);
-	PORTB.OUTCLR = PIN3_bm;
+	PORTB.OUTCLR = PIN3_bm;             // Clears pin3
 
 	_delay_us(delay_lcd_set);
 }
 
-//set LCD-ports
-void LCD_Char( unsigned char data )
+// Set LCD-ports
+void LCD_Char( uint8_t data )
 {
 	PORTD.OUT = data;
-	PORTB.OUTSET = PIN4_bm;				/* RS=1, command reg. */
-	PORTB.OUTSET = PIN3_bm;				/* Enable pulse */
+	PORTB.OUTSET = PIN4_bm;				// RS=1, command reg.
+	PORTB.OUTSET = PIN3_bm;				// Enable pulse
 	_delay_us(delay_enable);
-	PORTB.OUTCLR = PIN3_bm;
+	PORTB.OUTCLR = PIN3_bm;             // Clears pin3
 	_delay_us(delay_lcd_set);
-    LCD_Command(LCD_cursor_increment);
+    LCD_Command(LCD_cursor_increment);  
 }
 
-//Initialize LCD-screen
+// Initialize LCD-screen
 void LCD_Init (void)					
 {
-    PORTB.DIRSET = (PIN3_bm | PIN4_bm | PIN5_bm);
-    PORTB.OUTSET = PIN5_bm; 
-    PORTB.OUTCLR = (PIN3_bm | PIN4_bm);
-	PORTD.DIR = 0xFF;				
-    PORTD.OUT = 0x00;
+    PORTB.DIRSET = (PIN3_bm | PIN4_bm | PIN5_bm); // Enables pins
+    PORTB.OUTSET = PIN5_bm;                       // Sets pin 5 for output
+    PORTB.OUTCLR = (PIN3_bm | PIN4_bm);           // Clears pins 3 & 4
+	PORTD.DIR = 0xFF;                             // Enablses dataports 
+    PORTD.OUT = 0x00;                             // Sets dataports for output
     _delay_us(delay_lcd_set);						
 	
  
@@ -80,7 +81,7 @@ void LCD_Init (void)
 	_delay_us(delay_lcd_init);    
 }
 
-//enables writing to the LCD-screen
+// Enables writing to the LCD-screen
 void LCD_String (char *str)				
 {
 	int i;
@@ -90,7 +91,7 @@ void LCD_String (char *str)
 	}
 }
 
-//clears LCD-screen
+// Clears LCD-screen
 void LCD_Clear()
 {
 	LCD_Command(LCD_clear);					
@@ -99,38 +100,38 @@ void LCD_Clear()
     _delay_ms(delay_lcd_clear);
 }
 
-//Initialize ADC
+// Initialize ADC
 void ADC0_init(void)
 {
-    //Disable digital input buffer
+    // Disable digital input buffer
     PORTE.PIN0CTRL &= ~PORT_ISC_gm;
     PORTE.PIN0CTRL |= PORT_ISC_INPUT_DISABLE_gc;
     
-    //Disable pull-up resistor
+    // Disable pull-up resistor
     PORTE.PIN0CTRL &= ~PORT_PULLUPEN_bm;
     
-    //CLK_PER divided by 16, Internal reference
+    // CLK_PER divided by 16, Internal reference
     ADC0.CTRLC = ADC_PRESC_DIV16_gc | ADC_REFSEL_INTREF_gc;
     
-    //ADC enabled, 10-bit mode
+    // ADC enabled, 10-bit mode
     ADC0.CTRLA = ADC_ENABLE_bm | ADC_RESSEL_10BIT_gc;
     
-    //Select ADC channel
+    // Select ADC channel
     ADC0.MUXPOS = ADC_MUXPOS_AIN8_gc;
     
-    //set internal reference
-    VREF.CTRLA |= VREF_ADC0REFSEL_2V5_gc; 
+    // Set internal reference
+    VREF.CTRLA |= VREF_ADC0REFSEL_1V5_gc; 
     
-    //Enable interrupts
+    // Enable interrupts
     ADC0.INTCTRL |= ADC_RESRDY_bm;    
 }
 
 int main(void) 
 {   
-    //Eet up periodic cycle
+    // Set up periodic cycle
     RTC.PITCTRLA = RTC_PERIOD_CYC32768_gc;
     
-    //Initialize ADC
+    // Initialize ADC
     ADC0_init();	
     
     // Enable RTC interrupt timer
@@ -142,76 +143,80 @@ int main(void)
     // Sets dc-motor pin
     PORTA.DIRSET = PIN3_bm;
     
-    //let me sleep :)
+    // Initialize sleep_mode
     set_sleep_mode(SLPCTRL_SMODE_IDLE_gc);
     
-    //Initialize lcd-screen
-    cli();
+    // Initialize LCD-screen
+    cli();          // Disables interrupts
     LCD_Init();    
-    sei(); 
+    sei();          // Enables interrupts
 
-    //rtc enable
+    // RTC enable
     RTC.PITCTRLA = RTC.PITCTRLA | RTC_PITEN_bm;
     
-    //value for adc
-    uint16_t exValue = 0;
+    // Old ADC-value for comparison
+    uint8_t exValue = 0;
     
-    //prints rpm count.
+    // Prints RPM-count.
     LCD_Clear();
     LCD_String("RPM Count:");
     
-    ADC0.COMMAND = ADC_STCONV_bm;
+    // Turns on ADC-conversion
+    ADC0.COMMAND = ADC_STCONV_bm;       
     
-    //turns on dc-motor
-    //PORTA.OUT |= PIN3_bm;
+    // Turns on dc-motor
+    PORTA.OUT |= PIN3_bm;
     
+    // Initialize string for LCD-screen text
     char string[5];
     
     while(1)
     {   
         if (updateLCD)
         {
-            //näytön päivitys
-            rpm = clicks * 30;
-            sprintf(string, "%d", rpm);
+            // Updating screen
+            rpm = count * 30;   // 1s * (60 / 2) = RPM, because of 2 blades. 
+            sprintf(string, "%-4u", rpm); // Send to LCD
             LCD_Command(LCD_cursor_2_line_start);
-            LCD_String(string); 
-            clicks = 0;
-            updateLCD = 0;
+            LCD_String(string);     // Sets string to screen.
+            count = 0;              // Reset counter
+            updateLCD = 0;          // Reset counter
         }
         
-        //click counter, if over 600 adds click
+        // Counter, if over 250 adds count
         else
-        {        
-            if (ADC > 600 && exValue < 600)
+        {   
+            // Checks if Photoresistor is in dark.
+            if (ADC > ADC_threshold && exValue == 0)
             {
-                clicks++;
-                exValue = 700;
+                count++;
+                exValue = 1;      // Comparison value
             }
-
-            else if (ADC > 600 && exValue > 600)
+            // Leaves out counts if loop is going too fast for 1 bit.
+            else if (ADC > ADC_threshold && exValue == 1)
             {
-                exValue = 700;
+                exValue = 1;      // Comparison value
             }
             else
             {
-                exValue = 200;
+                exValue = 0;      // Comparison value
             }     
         }
         sleep_mode();
     }    
 }
 
-//counts rpm & prints it to the LCD-screen
+// Gives interrupt once per second to LCD-screen
 ISR(RTC_PIT_vect)
 {      
     RTC.PITINTFLAGS = RTC_PI_bm;
-    updateLCD = 5;
+    updateLCD = 1;
 }
 
+// ADC-interrupt
 ISR(ADC0_RESRDY_vect)
 {
-    //set ADC value
+    // Set ADC value
     ADC = ADC0.RES;
     
     ADC0.COMMAND = ADC_STCONV_bm;
